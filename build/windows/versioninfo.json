@@ -1,0 +1,25 @@
+{
+  "FixedFileInfo": {
+    "FileVersion": { "Major": 1, "Minor": 0, "Patch": 0, "Build": 0 },
+    "ProductVersion": { "Major": 1, "Minor": 0, "Patch": 0, "Build": 0 },
+    "FileFlagsMask": "3f",
+    "FileFlags": "00",
+    "FileOS": "040004",
+    "FileType": "01",
+    "FileSubType": "00"
+  },
+  "StringFileInfo": {
+    "Comments": "Manage your Spotify account with AI.",
+    "CompanyName": "Dashti Technologies LLC",
+    "FileDescription": "SpotiGent — AI Spotify Manager",
+    "FileVersion": "1.0.0",
+    "InternalName": "spotigent.exe",
+    "LegalCopyright": "Copyright (c) Dashti Technologies LLC",
+    "OriginalFilename": "spotigent.exe",
+    "ProductName": "SpotiGent",
+    "ProductVersion": "1.0.0"
+  },
+  "VersionString": "1.0.0",
+  "IconPath": "icon.ico",
+  "ManifestPath": ""
+}

@@ -1,0 +1,134 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Colors are stored as RGB triplets so Tailwind opacity modifiers work. */
+:root {
+  --c-surface: 15 17 21;
+  --c-surface-2: 23 26 33;
+  --c-line: 38 42 51;
+  --c-text: 231 233 238;
+  --c-muted: 139 147 167;
+  --c-accent: 29 185 84;
+  --c-accent-fg: 6 36 15;
+}
+
+/* Multiple themes via data-theme attribute */
+[data-theme='light'] {
+  --c-surface: 246 247 249;
+  --c-surface-2: 255 255 255;
+  --c-line: 227 230 234;
+  --c-text: 27 31 39;
+  --c-muted: 107 114 128;
+  --c-accent: 29 185 84;
+  --c-accent-fg: 255 255 255;
+}
+
+[data-theme='spotify'] {
+  --c-surface: 18 18 18;
+  --c-surface-2: 24 24 24;
+  --c-line: 40 40 40;
+  --c-text: 255 255 255;
+  --c-muted: 167 167 167;
+  --c-accent: 29 185 84;
+  --c-accent-fg: 0 0 0;
+}
+
+[data-theme='ocean'] {
+  --c-surface: 11 18 32;
+  --c-surface-2: 16 26 46;
+  --c-line: 29 42 68;
+  --c-text: 230 237 247;
+  --c-muted: 143 163 192;
+  --c-accent: 56 189 248;
+  --c-accent-fg: 4 40 58;
+}
+
+[data-theme='sunset'] {
+  --c-surface: 26 18 16;
+  --c-surface-2: 36 24 20;
+  --c-line: 58 38 32;
+  --c-text: 245 237 231;
+  --c-muted: 179 154 140;
+  --c-accent: 249 115 22;
+  --c-accent-fg: 42 18 4;
+}
+
+[data-theme='rose'] {
+  --c-surface: 23 15 19;
+  --c-surface-2: 32 21 27;
+  --c-line: 51 34 43;
+  --c-text: 249 238 244;
+  --c-muted: 185 150 168;
+  --c-accent: 236 72 153;
+  --c-accent-fg: 51 8 29;
+}
+
+[data-theme='darkplus'] {
+  --c-surface: 30 30 30;
+  --c-surface-2: 37 37 38;
+  --c-line: 62 62 66;
+  --c-text: 212 212 212;
+  --c-muted: 134 134 134;
+  --c-accent: 0 122 204;
+  --c-accent-fg: 255 255 255;
+}
+
+[data-theme='mono'] {
+  --c-surface: 10 10 10;
+  --c-surface-2: 20 20 20;
+  --c-line: 36 36 36;
+  --c-text: 237 237 237;
+  --c-muted: 138 138 138;
+  --c-accent: 229 229 229;
+  --c-accent-fg: 10 10 10;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  @apply bg-surface text-content;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+}
+
+@layer components {
+  .card {
+    @apply bg-surface2 border border-line rounded-xl;
+  }
+
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors;
+  }
+
+  .btn-primary {
+    @apply btn bg-accent text-accentfg hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply btn border border-line hover:bg-surface2;
+  }
+
+  .input {
+    @apply bg-surface border border-line rounded-lg px-3 py-2 text-sm text-content placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-accent/50;
+  }
+
+  .table-head {
+    @apply text-left text-xs uppercase tracking-wider text-muted;
+  }
+
+  .th {
+    @apply px-4 py-3 font-medium;
+  }
+
+  .td {
+    @apply px-4 py-3 align-middle;
+  }
+
+  .pill {
+    @apply inline-flex items-center rounded-full bg-surface px-2.5 py-0.5 text-xs border border-line text-muted;
+  }
+}
