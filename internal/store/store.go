@@ -53,7 +53,7 @@ func Defaults() Settings {
 		MistralModel:    "mistral-large-latest",
 		ClaudeModel:     "claude-sonnet-4-5",
 		GoogleModel:     "gemini-2.5-flash",
-		Theme:           "dark",
+		Theme:           "github",
 	}
 }
 

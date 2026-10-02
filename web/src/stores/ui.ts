@@ -7,7 +7,7 @@ export const ui = reactive({
   loadingSettings: true,
 
   applyTheme(theme?: string) {
-    const t = theme || this.settings?.theme || 'dark'
+    const t = theme || this.settings?.theme || 'github'
     document.documentElement.setAttribute('data-theme', t)
   },
 

@@ -12,6 +12,8 @@ const nav = [
   { to: '/musics', label: 'Musics', icon: '🎵' },
   { to: '/playlists', label: 'Playlists', icon: '📚' },
   { to: '/podcast', label: 'Podcast', icon: '🎙️' },
+  { to: '/history', label: 'History', icon: '🕘' },
+  { to: '/logs', label: 'Logs', icon: '📜' },
   { to: '/settings', label: 'Settings', icon: '⚙️' },
 ]
 

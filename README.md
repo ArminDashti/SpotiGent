@@ -7,11 +7,14 @@ SpotiGent wraps the Spotify Web API behind a local web UI and an AI agent (OpenR
 ## Features
 
 - **Dashboard** — playlist/track stats, listening time, top artists, recently played
-- **AI** — chat with an agent that manages your library through tools
-- **Musics** — every unique track across all playlists (Song, Artists, Album, Playlists)
-- **Playlists** — playlists with expandable track tables (Song, Artists, Album, Playlists)
+- **AI** — chat with an agent that manages your library through tools, with a saved **chat history** sidebar (conversations persist across reloads and restarts)
+- **Musics** — every unique track across all playlists (Song, Artists, Album, Playlists); every column sortable
+- **Playlists** — playlists with expandable track tables (Song, Artists, Album, Playlists); every column sortable
 - **Podcast** — saved shows with their latest episodes
-- **Settings** — Spotify OAuth, AI provider + key + model, 8 UI themes (incl. Dark+)
+- **Listening History** — your last 50 plays from Spotify; every column sortable
+- **Logs** — in-app Info / Warning / Error log with level filter, auto-refresh and sortable columns (secrets are masked to `********` before storage)
+- **Settings** — Spotify OAuth (auto-filled from `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` env vars), AI provider + key + model, 9 UI themes (**GitHub** default, bright-white text)
+- **Masked keys** — any stored or environment key is displayed as `********` (actual key length) everywhere in the UI and API; masked values are ignored on save
 - **PWA** — installable app with offline shell (manifest + service worker)
 
 ## Quick start
@@ -37,11 +40,12 @@ cd web && npm run dev             # Vite on :5173, proxies /api to :8080
 
 ## Setup
 
-1. **Spotify**: create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard). In **Settings**, enter its **Client ID** and **Client Secret**. Add the exact Redirect URI shown there to your Spotify app, save, then choose **Save & connect Spotify** and approve access. SpotiGent uses Spotify's Authorization Code flow and refreshes tokens automatically. Spotify refresh tokens expire after six months; reconnect when asked. Spotify Development Mode apps require the app owner to have Premium.
+1. **Spotify**: create an app in the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard). In **Settings**, enter its **Client ID** and **Client Secret** — or export `SPOTIFY_CLIENT_ID` / `SPOTIFY_CLIENT_SECRET` and the boxes are prefilled automatically (masked as `********`). Add the exact Redirect URI shown there to your Spotify app, save, then choose **Save & connect Spotify** and approve access. SpotiGent uses Spotify's Authorization Code flow and refreshes tokens automatically. Spotify refresh tokens expire after six months; reconnect when asked. Spotify Development Mode apps require the app owner to have Premium.
 2. **AI**: in Settings, pick **OpenRouter** (key from openrouter.ai), **OpenCode Go** ($10/mo plan, key from opencode.ai/auth), **OpenAI** (key from platform.openai.com), **Mistral** (key from console.mistral.ai), **Claude** (key from console.anthropic.com) or **Google** Gemini (key from AI Studio), paste the key, choose a model, save. Env fallbacks: `OPENROUTER_API_KEY`, `OPENCODE_API_KEY`, `OPENAI_API_KEY`, `MISTRAL_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_API_KEY`.
 
-Credentials and tokens are stored in `data/settings.json` (created at runtime,
-git-ignored via `data/`).
+Credentials and tokens are stored in `data/settings.json` and AI chat
+history in `data/chats.json` (created at runtime, git-ignored via
+`data/`).
 
 ## Release build (Windows)
 
@@ -79,6 +83,8 @@ SpotiGent is installable. The service worker caches the app shell only —
 |---|---|---|
 | `SPOTIGENT_HOST` | `127.0.0.1` | listen host |
 | `SPOTIGENT_PORT` | `8080` | listen port (or `-port`) |
+| `SPOTIFY_CLIENT_ID` | — | Spotify client ID (auto-fills Settings; UI value wins) |
+| `SPOTIFY_CLIENT_SECRET` | — | Spotify client secret (auto-fills Settings; UI value wins) |
 | `OPENROUTER_API_KEY` | — | fallback if no UI key |
 | `OPENCODE_API_KEY` | — | fallback if no UI key |
 | `OPENAI_API_KEY` | — | fallback if no UI key |
@@ -109,7 +115,12 @@ Try: *"Create a focus playlist with 20 deep house tracks"* — the agent searche
 | `GET /api/musics` | unique tracks across playlists |
 | `GET /api/playlists` | playlists with nested tracks |
 | `GET /api/podcasts` | saved shows + latest episodes |
-| `POST /api/ai/chat` | run the AI agent |
+| `GET /api/history` | last 50 recently played tracks |
+| `POST /api/ai/chat` | run the AI agent (persists to chat history) |
+| `GET /api/chats` | list saved chat sessions |
+| `GET /api/chats/:id` | one full conversation |
+| `DELETE /api/chats/:id` | delete a conversation |
+| `GET /api/logs` | in-memory log entries (`?level=info\|warning\|error`) |
 | `POST /api/refresh` | invalidate + rebuild library cache |
 
 ## Project layout
@@ -117,7 +128,8 @@ Try: *"Create a focus playlist with 20 deep house tracks"* — the agent searche
 ```
 cmd/spotigent/       entrypoint
 internal/config/     env config
-internal/store/      settings persistence (JSON)
+internal/store/      settings + chat history persistence (JSON)
+internal/logs/       in-memory Info/Warning/Error log with secret masking
 internal/spotify/    Spotify Web API client (OAuth, paging, actions)
 internal/ai/         OpenRouter/OpenCode/OpenAI/Mistral/Claude/Google providers + agent + tools
 internal/server/     Gin routes + SPA static serving

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { api } from '../api'
+import { useSortable } from '../composables/useSortable'
 import type { Track } from '../types'
 
 const tracks = ref<Track[]>([])
@@ -8,8 +9,6 @@ const total = ref(0)
 const loading = ref(true)
 const error = ref('')
 const query = ref('')
-const sortKey = ref<'name' | 'artists' | 'album'>('name')
-const sortAsc = ref(true)
 
 onMounted(async () => {
   try {
@@ -29,39 +28,28 @@ function fmtDuration(ms: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-function setSort(key: 'name' | 'artists' | 'album') {
-  if (sortKey.value === key) {
-    sortAsc.value = !sortAsc.value
-  } else {
-    sortKey.value = key
-    sortAsc.value = true
-  }
-}
-
 const filtered = computed(() => {
   const q = query.value.trim().toLowerCase()
-  const rows = q
-    ? tracks.value.filter(
-        (t) =>
-          t.name.toLowerCase().includes(q) ||
-          t.album.toLowerCase().includes(q) ||
-          t.artists.some((a) => a.toLowerCase().includes(q)) ||
-          t.playlists.some((p) => p.toLowerCase().includes(q)),
-      )
-    : tracks.value
-
-  const dir = sortAsc.value ? 1 : -1
-  return [...rows].sort((a, b) => {
-    const av = sortKey.value === 'artists' ? a.artists.join(', ') : a[sortKey.value]
-    const bv = sortKey.value === 'artists' ? b.artists.join(', ') : b[sortKey.value]
-    return av.localeCompare(bv) * dir
-  })
+  if (!q) return tracks.value
+  return tracks.value.filter(
+    (t) =>
+      t.name.toLowerCase().includes(q) ||
+      t.album.toLowerCase().includes(q) ||
+      t.artists.some((a) => a.toLowerCase().includes(q)) ||
+      t.playlists.some((p) => p.toLowerCase().includes(q)),
+  )
 })
 
-function sortIndicator(key: string): string {
-  if (sortKey.value !== key) return '↕'
-  return sortAsc.value ? '↑' : '↓'
-}
+// Every column is sortable: #, Song, Artists, Album, Playlists, Time.
+const { setSort, indicator, sorted } = useSortable(() => filtered.value, {
+  defaultKey: 'name',
+  accessors: {
+    index: (_row, index) => index,
+    artists: (row) => row.artists.join(', '),
+    playlists: (row) => row.playlists.join(', '),
+    duration_ms: (row) => row.duration_ms,
+  },
+})
 </script>
 
 <template>
@@ -81,16 +69,16 @@ function sortIndicator(key: string): string {
       <table class="w-full text-sm">
         <thead class="table-head border-b border-line">
           <tr>
-            <th class="th w-10">#</th>
-            <th class="th cursor-pointer select-none" @click="setSort('name')">Song {{ sortIndicator('name') }}</th>
-            <th class="th cursor-pointer select-none" @click="setSort('artists')">Artists {{ sortIndicator('artists') }}</th>
-            <th class="th cursor-pointer select-none" @click="setSort('album')">Album {{ sortIndicator('album') }}</th>
-            <th class="th">Playlists</th>
-            <th class="th w-20 text-right">Time</th>
+            <th class="th w-10 cursor-pointer select-none" @click="setSort('index')"># {{ indicator('index') }}</th>
+            <th class="th cursor-pointer select-none" @click="setSort('name')">Song {{ indicator('name') }}</th>
+            <th class="th cursor-pointer select-none" @click="setSort('artists')">Artists {{ indicator('artists') }}</th>
+            <th class="th cursor-pointer select-none" @click="setSort('album')">Album {{ indicator('album') }}</th>
+            <th class="th cursor-pointer select-none" @click="setSort('playlists')">Playlists {{ indicator('playlists') }}</th>
+            <th class="th w-20 text-right cursor-pointer select-none" @click="setSort('duration_ms')">Time {{ indicator('duration_ms') }}</th>
           </tr>
         </thead>
         <tbody>
-          <tr v-for="(t, i) in filtered" :key="t.id" class="border-b border-line/50 hover:bg-surface2/60">
+          <tr v-for="(t, i) in sorted" :key="t.id" class="border-b border-line/50 hover:bg-surface2/60">
             <td class="td text-muted">{{ i + 1 }}</td>
             <td class="td">
               <div class="flex items-center gap-3">
@@ -114,7 +102,7 @@ function sortIndicator(key: string): string {
             </td>
             <td class="td text-right text-muted tabular-nums">{{ fmtDuration(t.duration_ms) }}</td>
           </tr>
-          <tr v-if="filtered.length === 0">
+          <tr v-if="sorted.length === 0">
             <td class="td text-muted text-center" colspan="6">No tracks found.</td>
           </tr>
         </tbody>

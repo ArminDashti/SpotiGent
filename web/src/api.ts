@@ -1,4 +1,4 @@
-import type { ChatMessage, DashboardData, Playlist, Provider, PublicSettings, Show, Track } from './types'
+import type { ChatMessage, ChatSession, DashboardData, HistoryItem, LogEntry, Playlist, Provider, PublicSettings, Show, Track } from './types'
 
 class ApiError extends Error {}
 
@@ -34,13 +34,24 @@ export const api = {
 
   podcasts: () => request<{ shows: Show[]; total: number }>('/api/podcasts'),
 
-  chat: (message: string, history: ChatMessage[]) =>
-    request<{ reply: string }>('/api/ai/chat', {
+  chat: (message: string, history: ChatMessage[], sessionId?: string) =>
+    request<{ reply: string; session_id: string }>('/api/ai/chat', {
       method: 'POST',
-      body: JSON.stringify({ message, history }),
+      body: JSON.stringify({ message, history, session_id: sessionId ?? '' }),
     }),
+
+  chats: () => request<{ chats: ChatSession[] }>('/api/chats'),
+
+  chatSession: (id: string) => request<ChatSession>(`/api/chats/${id}`),
+
+  deleteChat: (id: string) => request<{ ok: boolean }>(`/api/chats/${id}`, { method: 'DELETE' }),
+
+  history: () => request<{ items: HistoryItem[]; total: number }>('/api/history'),
+
+  logs: (level?: string) =>
+    request<{ entries: LogEntry[]; total: number }>(`/api/logs${level ? `?level=${level}` : ''}`),
 
   refresh: () => request<{ ok: boolean }>('/api/refresh', { method: 'POST' }),
 }
 
-export type { ChatMessage, DashboardData, Playlist, Provider, PublicSettings, Show, Track }
+export type { ChatMessage, ChatSession, DashboardData, HistoryItem, LogEntry, Playlist, Provider, PublicSettings, Show, Track }

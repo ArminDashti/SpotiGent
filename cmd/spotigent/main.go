@@ -19,6 +19,7 @@ import (
 	"os"
 
 	"spotigent/internal/config"
+	"spotigent/internal/logs"
 	"spotigent/internal/server"
 	"spotigent/internal/store"
 )
@@ -35,6 +36,12 @@ func main() {
 	if *port != "" {
 		cfg.Port = *port
 	}
+	if cfg.SpotifyClientID != "" {
+		logs.LogInfo("SPOTIFY_CLIENT_ID detected in environment — Settings boxes prefilled")
+	}
+	if cfg.SpotifyClientSecret != "" {
+		logs.LogInfo("SPOTIFY_CLIENT_SECRET detected in environment — Settings boxes prefilled")
+	}
 
 	dataDir := os.Getenv("SPOTIGENT_DATA_DIR")
 	if dataDir == "" {
@@ -46,10 +53,17 @@ func main() {
 		log.Fatalf("settings store: %v", err)
 	}
 
-	srv := server.New(cfg, st)
+	chats, err := store.NewChatStore(dataDir + "/chats.json")
+	if err != nil {
+		log.Fatalf("chat store: %v", err)
+	}
+
+	srv := server.New(cfg, st, chats)
 	addr := cfg.Addr()
+	logs.LogInfo("SpotiGent %s starting on http://%s", version, addr)
 	fmt.Printf("SpotiGent %s listening on http://%s\n", version, addr)
 	if err := srv.Router().Run(addr); err != nil {
+		logs.LogError("server stopped: %v", err)
 		log.Fatal(err)
 	}
 }
