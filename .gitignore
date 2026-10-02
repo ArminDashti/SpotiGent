@@ -19,3 +19,4 @@ release/
 server.log
 .freebuff/
 spotigent.exe.sha256
+# commit-push-to-github: ignore files > 5MB
