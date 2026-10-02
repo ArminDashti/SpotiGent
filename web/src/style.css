@@ -3,7 +3,19 @@
 @tailwind utilities;
 
 /* Colors are stored as RGB triplets so Tailwind opacity modifiers work. */
+/* :root holds the GitHub theme — the app default before JS applies one. */
 :root {
+  --c-surface: 13 17 23;
+  --c-surface-2: 22 27 34;
+  --c-line: 48 54 61;
+  --c-text: 255 255 255;
+  --c-muted: 165 174 187;
+  --c-accent: 35 134 54;
+  --c-accent-fg: 255 255 255;
+}
+
+/* Multiple themes via data-theme attribute */
+[data-theme='dark'] {
   --c-surface: 15 17 21;
   --c-surface-2: 23 26 33;
   --c-line: 38 42 51;
@@ -13,7 +25,17 @@
   --c-accent-fg: 6 36 15;
 }
 
-/* Multiple themes via data-theme attribute */
+/* GitHub dark (default) — bright white text on #0d1117 */
+[data-theme='github'] {
+  --c-surface: 13 17 23;
+  --c-surface-2: 22 27 34;
+  --c-line: 48 54 61;
+  --c-text: 255 255 255;
+  --c-muted: 165 174 187;
+  --c-accent: 35 134 54;
+  --c-accent-fg: 255 255 255;
+}
+
 [data-theme='light'] {
   --c-surface: 246 247 249;
   --c-surface-2: 255 255 255;

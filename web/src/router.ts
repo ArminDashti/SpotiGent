@@ -6,6 +6,8 @@ const routes = [
   { path: '/musics', name: 'musics', component: () => import('./pages/Musics.vue'), meta: { title: 'Musics' } },
   { path: '/playlists', name: 'playlists', component: () => import('./pages/Playlists.vue'), meta: { title: 'Playlists' } },
   { path: '/podcast', name: 'podcast', component: () => import('./pages/Podcast.vue'), meta: { title: 'Podcast' } },
+  { path: '/history', name: 'history', component: () => import('./pages/History.vue'), meta: { title: 'Listening History' } },
+  { path: '/logs', name: 'logs', component: () => import('./pages/Logs.vue'), meta: { title: 'Logs' } },
   { path: '/settings', name: 'settings', component: () => import('./pages/Settings.vue'), meta: { title: 'Settings' } },
   { path: '/:pathMatch(.*)*', redirect: '/' },
 ]

@@ -67,6 +67,7 @@ const keySetFor = (id: Provider): boolean => {
 
 const themeOptions: { id: string; label: string; colors: string[] }[] = THEMES.map((id) => {
   const labels: Record<string, string> = {
+    github: 'GitHub',
     dark: 'Dark',
     darkplus: 'Dark+',
     light: 'Light',
@@ -80,6 +81,7 @@ const themeOptions: { id: string; label: string; colors: string[] }[] = THEMES.m
 })
 
 const themePreview: Record<string, [string, string]> = {
+  github: ['#0d1117', '#238636'],
   dark: ['#0f1115', '#1db954'],
   darkplus: ['#1e1e1e', '#007acc'],
   light: ['#f6f7f9', '#1db954'],
@@ -88,6 +90,21 @@ const themePreview: Record<string, [string, string]> = {
   sunset: ['#1a1210', '#f97316'],
   rose: ['#170f13', '#ec4899'],
   mono: ['#0a0a0a', '#e5e5e5'],
+}
+
+// Fill every key input with the masked value the server reported
+// (asterisks of the actual key length), so stored/env keys show as ********.
+function prefillMaskedKeys() {
+  const s = ui.settings
+  if (!s) return
+  keys.value = {
+    openrouter: s.openrouter_key_masked ?? '',
+    opencode: s.opencode_key_masked ?? '',
+    openai: s.openai_key_masked ?? '',
+    mistral: s.mistral_key_masked ?? '',
+    claude: s.claude_key_masked ?? '',
+    google: s.google_key_masked ?? '',
+  }
 }
 
 onMounted(async () => {
@@ -107,9 +124,12 @@ onMounted(async () => {
     models.value.mistral = ui.settings.mistral_model
     models.value.claude = ui.settings.claude_model
     models.value.google = ui.settings.google_model
-    // Show the stored client ID so the field never looks empty after saving.
-    // (The secret is never returned by the API, so it stays write-only.)
+    // Boxes are prefilled with masked values (******** of the actual
+    // key length) for whatever is configured — stored or from the
+    // SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET env vars.
     spotifyClientID.value = ui.settings.spotify_client_id ?? ''
+    spotifyClientSecret.value = ui.settings.spotify_client_secret ?? ''
+    prefillMaskedKeys()
   }
   try {
     const res = await fetch('/api/models')
@@ -154,6 +174,13 @@ async function connectSpotify() {
   }
 }
 
+// A field whose value is all asterisks shows the literal ********
+// placeholder; anything else the user types is treated as a new secret
+// and hidden behind a password field.
+function inputType(value: string): 'text' | 'password' {
+  return value && /^\*+$/.test(value) ? 'text' : 'password'
+}
+
 const keyFieldFor: Record<Provider, string> = {
   openrouter: 'openrouter_api_key',
   opencode: 'opencode_api_key',
@@ -178,11 +205,14 @@ async function saveAI() {
     const patch: Record<string, unknown> = { provider: provider.value }
     for (const id of Object.keys(models.value) as Provider[]) {
       if (models.value[id]?.trim()) patch[modelFieldFor[id]] = models.value[id].trim()
-      if (keys.value[id]?.trim()) patch[keyFieldFor[id]] = keys.value[id].trim()
+      const key = keys.value[id]?.trim()
+      // Skip untouched masked placeholders (********) — they mean "keep stored key".
+      if (key && !/^\*+$/.test(key)) patch[keyFieldFor[id]] = key
     }
     await api.updateSettings(patch)
-    keys.value = { openrouter: '', opencode: '', openai: '', mistral: '', claude: '', google: '' }
     await ui.loadSettings()
+    // Re-fill inputs with the server's masked values (******** of actual length).
+    prefillMaskedKeys()
     savedFlash.value = true
     setTimeout(() => (savedFlash.value = false), 2000)
   } finally {
@@ -241,16 +271,20 @@ function setTheme(id: string) {
           v-model="spotifyClientID"
           type="text"
           class="input w-full"
-          placeholder="Spotify client ID"
+          :placeholder="ui.settings?.spotify_client_id_set ? 'Client ID configured (masked)' : 'Spotify client ID'"
           autocomplete="off"
         />
         <input
           v-model="spotifyClientSecret"
-          type="password"
+          :type="inputType(spotifyClientSecret)"
           class="input w-full"
-          :placeholder="ui.settings?.spotify_client_secret_set ? 'Client secret stored — enter only to replace' : 'Spotify client secret'"
+          :placeholder="ui.settings?.spotify_client_secret_set ? 'Client secret configured (masked) — enter only to replace' : 'Spotify client secret'"
           autocomplete="new-password"
         />
+        <p class="text-xs text-muted">
+          Detected automatically from <code>SPOTIFY_CLIENT_ID</code> / <code>SPOTIFY_CLIENT_SECRET</code> env vars when set.
+          Stored keys always display as ******** (actual length).
+        </p>
         <button class="btn-primary" :disabled="connectingSpotify || (!spotifyClientID.trim() && !ui.settings?.spotify_client_id_set)" @click="connectSpotify">
           {{ connectingSpotify ? 'Opening Spotify…' : (ui.settings?.spotify_configured ? 'Reconnect Spotify' : 'Save & connect Spotify') }}
         </button>
@@ -293,7 +327,7 @@ function setTheme(id: string) {
           <label class="text-xs text-muted">{{ p.label }} API key</label>
           <input
             v-model="keys[p.id]"
-            type="password"
+            :type="inputType(keys[p.id])"
             class="input w-full"
             :placeholder="keySetFor(p.id) ? 'Key stored — enter only to replace' : p.keyPlaceholder"
             autocomplete="off"

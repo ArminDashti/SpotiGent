@@ -12,6 +12,12 @@ type Config struct {
 	Host string
 	Port string
 
+	// Optional environment defaults for the Spotify application credentials.
+	// Values entered in the web UI take precedence over these; when the UI
+	// boxes are empty these are used instead (and prefill the Settings form).
+	SpotifyClientID     string
+	SpotifyClientSecret string
+
 	// Optional environment overrides for the AI provider API keys.
 	// Keys entered in the web UI take precedence over these.
 	OpenRouterAPIKey string
@@ -40,20 +46,22 @@ func getEnv(key, fallback string) string {
 // Load reads configuration from the environment with sensible defaults.
 func Load() Config {
 	return Config{
-		Host:              getEnv("SPOTIGENT_HOST", "127.0.0.1"),
-		Port:              getEnv("SPOTIGENT_PORT", "8080"),
-		OpenRouterAPIKey:  os.Getenv("OPENROUTER_API_KEY"),
-		OpenCodeAPIKey:    os.Getenv("OPENCODE_API_KEY"),
-		OpenAIAPIKey:      firstEnv("OPENAI_API_KEY"),
-		MistralAPIKey:     firstEnv("MISTRAL_API_KEY"),
-		ClaudeAPIKey:      firstEnv("ANTHROPIC_API_KEY", "CLAUDE_API_KEY"),
-		GoogleAPIKey:      firstEnv("GOOGLE_API_KEY", "GEMINI_API_KEY", "GOOGLE_GEMINI_API_KEY"),
-		OpenRouterBaseURL: getEnv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
-		OpenCodeBaseURL:   getEnv("OPENCODE_BASE_URL", "https://opencode.ai/zen/go/v1"),
-		OpenAIBaseURL:     getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
-		MistralBaseURL:    getEnv("MISTRAL_BASE_URL", "https://api.mistral.ai/v1"),
-		ClaudeBaseURL:     getEnv("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
-		GoogleBaseURL:     getEnv("GOOGLE_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai"),
+		Host:                getEnv("SPOTIGENT_HOST", "127.0.0.1"),
+		Port:                getEnv("SPOTIGENT_PORT", "8080"),
+		SpotifyClientID:     os.Getenv("SPOTIFY_CLIENT_ID"),
+		SpotifyClientSecret: os.Getenv("SPOTIFY_CLIENT_SECRET"),
+		OpenRouterAPIKey:    os.Getenv("OPENROUTER_API_KEY"),
+		OpenCodeAPIKey:      os.Getenv("OPENCODE_API_KEY"),
+		OpenAIAPIKey:        firstEnv("OPENAI_API_KEY"),
+		MistralAPIKey:       firstEnv("MISTRAL_API_KEY"),
+		ClaudeAPIKey:        firstEnv("ANTHROPIC_API_KEY", "CLAUDE_API_KEY"),
+		GoogleAPIKey:        firstEnv("GOOGLE_API_KEY", "GEMINI_API_KEY", "GOOGLE_GEMINI_API_KEY"),
+		OpenRouterBaseURL:   getEnv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1"),
+		OpenCodeBaseURL:     getEnv("OPENCODE_BASE_URL", "https://opencode.ai/zen/go/v1"),
+		OpenAIBaseURL:       getEnv("OPENAI_BASE_URL", "https://api.openai.com/v1"),
+		MistralBaseURL:      getEnv("MISTRAL_BASE_URL", "https://api.mistral.ai/v1"),
+		ClaudeBaseURL:       getEnv("ANTHROPIC_BASE_URL", "https://api.anthropic.com"),
+		GoogleBaseURL:       getEnv("GOOGLE_BASE_URL", "https://generativelanguage.googleapis.com/v1beta/openai"),
 	}
 }
 

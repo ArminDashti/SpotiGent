@@ -20,6 +20,7 @@ import (
 
 	"spotigent/internal/ai"
 	"spotigent/internal/config"
+	"spotigent/internal/logs"
 	"spotigent/internal/spotify"
 	"spotigent/internal/store"
 )
@@ -28,6 +29,7 @@ import (
 type Server struct {
 	cfg   config.Config
 	store *store.Store
+	chats *store.ChatStore
 	sp    *spotify.Client
 
 	mu        sync.Mutex
@@ -44,8 +46,57 @@ type Server struct {
 }
 
 // New creates the server.
-func New(cfg config.Config, st *store.Store) *Server {
-	return &Server{cfg: cfg, store: st, sp: spotify.New()}
+func New(cfg config.Config, st *store.Store, chats *store.ChatStore) *Server {
+	s := &Server{cfg: cfg, store: st, chats: chats, sp: spotify.New()}
+	// Never let secrets surface verbatim in the Logs section.
+	logs.Default.RegisterSecret(
+		cfg.SpotifyClientID, cfg.SpotifyClientSecret,
+		cfg.OpenRouterAPIKey, cfg.OpenCodeAPIKey, cfg.OpenAIAPIKey,
+		cfg.MistralAPIKey, cfg.ClaudeAPIKey, cfg.GoogleAPIKey,
+	)
+	if st != nil {
+		if cur, err := st.Load(); err == nil {
+			s.registerSecrets(cur)
+		}
+	}
+	return s
+}
+
+// registerSecrets teaches the logger to mask every stored credential.
+func (s *Server) registerSecrets(st store.Settings) {
+	logs.Default.RegisterSecret(
+		st.SpotifyClientID, st.SpotifyClientSecret,
+		st.SpotifyAccessToken, st.SpotifyRefreshToken,
+		st.OpenRouterAPIKey, st.OpenCodeAPIKey, st.OpenAIAPIKey,
+		st.MistralAPIKey, st.ClaudeAPIKey, st.GoogleAPIKey,
+	)
+}
+
+// maskKey renders a secret as asterisks of its actual length.
+func maskKey(v string) string {
+	return masked(v)
+}
+
+// isMaskedValue reports whether a submitted value is an unchanged
+// masked placeholder (all asterisks) rather than a new secret.
+func isMaskedValue(v string) bool {
+	v = strings.TrimSpace(v)
+	return v != "" && strings.Trim(v, "*") == ""
+}
+
+// spotifyCreds returns the effective Spotify application credentials:
+// UI-entered values win, falling back to SPOTIFY_CLIENT_ID /
+// SPOTIFY_CLIENT_SECRET from the environment.
+func (s *Server) spotifyCreds(st store.Settings) (id, secret string) {
+	id = st.SpotifyClientID
+	if id == "" {
+		id = s.cfg.SpotifyClientID
+	}
+	secret = st.SpotifyClientSecret
+	if secret == "" {
+		secret = s.cfg.SpotifyClientSecret
+	}
+	return id, secret
 }
 
 // ---- shared helpers ----
@@ -64,7 +115,13 @@ func (s *Server) settings() store.Settings {
 
 // effectiveAIKey returns the UI-entered key, falling back to env.
 func (s *Server) effectiveAIKey(st store.Settings) string {
-	switch st.Provider {
+	return s.effectiveProviderKey(st, st.Provider)
+}
+
+// effectiveProviderKey returns the stored key for one provider,
+// falling back to that provider's environment override.
+func (s *Server) effectiveProviderKey(st store.Settings, provider string) string {
+	switch provider {
 	case "opencode":
 		if st.OpenCodeAPIKey != "" {
 			return st.OpenCodeAPIKey
@@ -145,7 +202,8 @@ func (s *Server) aiConfig(st store.Settings) ai.Config {
 
 // spotifyReady reports whether Spotify authorization is available.
 func (s *Server) spotifyReady(st store.Settings) bool {
-	return st.SpotifyClientID != "" && st.SpotifyClientSecret != "" && st.SpotifyRefreshToken != ""
+	id, secret := s.spotifyCreds(st)
+	return id != "" && secret != "" && st.SpotifyRefreshToken != ""
 }
 
 func (s *Server) requireSpotify(c *gin.Context) (store.Settings, bool) {
@@ -184,8 +242,9 @@ func randomOAuthValue() (string, error) {
 
 func (s *Server) handleSpotifyLogin(c *gin.Context) {
 	st := s.settings()
-	if st.SpotifyClientID == "" || st.SpotifyClientSecret == "" {
-		c.JSON(http.StatusBadRequest, fail{Error: "save your Spotify client ID and client secret first"})
+	clientID, clientSecret := s.spotifyCreds(st)
+	if clientID == "" || clientSecret == "" {
+		c.JSON(http.StatusBadRequest, fail{Error: "save your Spotify client ID and client secret first (or set SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET)"})
 		return
 	}
 	state, err := randomOAuthValue()
@@ -199,7 +258,7 @@ func (s *Server) handleSpotifyLogin(c *gin.Context) {
 	s.oauthMu.Unlock()
 
 	params := url.Values{
-		"client_id":     {st.SpotifyClientID},
+		"client_id":     {clientID},
 		"response_type": {"code"},
 		"redirect_uri":  {s.spotifyRedirectURI()},
 		"scope":         {spotify.Scopes},
@@ -234,9 +293,10 @@ func (s *Server) handleSpotifyCallback(c *gin.Context) {
 	}
 
 	st := s.settings()
+	clientID, clientSecret := s.spotifyCreds(st)
 	ctx, cancel := context.WithTimeout(c.Request.Context(), 20*time.Second)
 	defer cancel()
-	tokens, err := s.sp.ExchangeCode(ctx, st.SpotifyClientID, st.SpotifyClientSecret, s.spotifyRedirectURI(), code)
+	tokens, err := s.sp.ExchangeCode(ctx, clientID, clientSecret, s.spotifyRedirectURI(), code)
 	if err != nil {
 		c.String(http.StatusBadGateway, "Spotify authorization failed: "+err.Error())
 		return
@@ -271,10 +331,11 @@ func (s *Server) spotifyAccessToken(ctx context.Context) (string, error) {
 	if st.SpotifyAccessToken != "" && time.Now().Add(30*time.Second).Before(st.SpotifyTokenExpiry) {
 		return st.SpotifyAccessToken, nil
 	}
-	if st.SpotifyRefreshToken == "" || st.SpotifyClientID == "" || st.SpotifyClientSecret == "" {
+	clientID, clientSecret := s.spotifyCreds(st)
+	if st.SpotifyRefreshToken == "" || clientID == "" || clientSecret == "" {
 		return "", fmt.Errorf("Spotify authorization expired — reconnect in Settings")
 	}
-	tokens, err := s.sp.RefreshAccessToken(ctx, st.SpotifyClientID, st.SpotifyClientSecret, st.SpotifyRefreshToken)
+	tokens, err := s.sp.RefreshAccessToken(ctx, clientID, clientSecret, st.SpotifyRefreshToken)
 	if err != nil {
 		if strings.Contains(err.Error(), "invalid_grant") {
 			_ = s.store.Update(func(current *store.Settings) {
@@ -332,6 +393,7 @@ type publicSettings struct {
 	SpotifyClientID        string `json:"spotify_client_id,omitempty"`
 	SpotifyClientIDSet     bool   `json:"spotify_client_id_set"`
 	SpotifyClientSecretSet bool   `json:"spotify_client_secret_set"`
+	SpotifyClientSecret    string `json:"spotify_client_secret,omitempty"`
 	SpotifyRedirectURI     string `json:"spotify_redirect_uri"`
 	SpotifyUserID          string `json:"spotify_user_id"`
 	Provider               string `json:"provider"`
@@ -341,6 +403,12 @@ type publicSettings struct {
 	MistralSet             bool   `json:"mistral_set"`
 	ClaudeSet              bool   `json:"claude_set"`
 	GoogleSet              bool   `json:"google_set"`
+	OpenRouterKey          string `json:"openrouter_key_masked,omitempty"`
+	OpenCodeKey            string `json:"opencode_key_masked,omitempty"`
+	OpenAIKey              string `json:"openai_key_masked,omitempty"`
+	MistralKey             string `json:"mistral_key_masked,omitempty"`
+	ClaudeKey              string `json:"claude_key_masked,omitempty"`
+	GoogleKey              string `json:"google_key_masked,omitempty"`
 	OpenRouterModel        string `json:"openrouter_model"`
 	OpenCodeModel          string `json:"opencode_model"`
 	OpenAIModel            string `json:"openai_model"`
@@ -350,13 +418,23 @@ type publicSettings struct {
 	Theme                  string `json:"theme"`
 }
 
+// masked returns asterisks of the actual key length, or "" when unset.
+func masked(v string) string {
+	if v == "" {
+		return ""
+	}
+	return strings.Repeat("*", len(v))
+}
+
 func (s *Server) handleGetSettings(c *gin.Context) {
 	st := s.settings()
+	clientID, clientSecret := s.spotifyCreds(st)
 	c.JSON(http.StatusOK, publicSettings{
 		SpotifyConfigured:      s.spotifyReady(st),
-		SpotifyClientID:        st.SpotifyClientID,
-		SpotifyClientIDSet:     st.SpotifyClientID != "",
-		SpotifyClientSecretSet: st.SpotifyClientSecret != "",
+		SpotifyClientID:        masked(clientID),
+		SpotifyClientIDSet:     clientID != "",
+		SpotifyClientSecretSet: clientSecret != "",
+		SpotifyClientSecret:    masked(clientSecret),
 		SpotifyRedirectURI:     s.spotifyRedirectURI(),
 		SpotifyUserID:          st.SpotifyUserID,
 		Provider:               st.Provider,
@@ -366,6 +444,12 @@ func (s *Server) handleGetSettings(c *gin.Context) {
 		MistralSet:             st.MistralAPIKey != "" || s.cfg.MistralAPIKey != "",
 		ClaudeSet:              st.ClaudeAPIKey != "" || s.cfg.ClaudeAPIKey != "",
 		GoogleSet:              st.GoogleAPIKey != "" || s.cfg.GoogleAPIKey != "",
+		OpenRouterKey:          masked(s.effectiveProviderKey(st, "openrouter")),
+		OpenCodeKey:            masked(s.effectiveProviderKey(st, "opencode")),
+		OpenAIKey:              masked(s.effectiveProviderKey(st, "openai")),
+		MistralKey:             masked(s.effectiveProviderKey(st, "mistral")),
+		ClaudeKey:              masked(s.effectiveProviderKey(st, "claude")),
+		GoogleKey:              masked(s.effectiveProviderKey(st, "google")),
 		OpenRouterModel:        st.OpenRouterModel,
 		OpenCodeModel:          st.OpenCodeModel,
 		OpenAIModel:            st.OpenAIModel,
@@ -406,9 +490,15 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 		credentialsChanged := false
 		if req.SpotifyClientID != nil {
 			clientID := strings.TrimSpace(*req.SpotifyClientID)
+			// A masked placeholder means "unchanged" — keep the stored value.
+			if isMaskedValue(clientID) {
+				clientID = st.SpotifyClientID
+			}
 			if clientID != st.SpotifyClientID {
 				credentialsChanged = true
-				if req.SpotifyClientSecret == nil {
+				// A different Spotify app invalidates the old secret unless
+				// a fresh (unmasked) secret is submitted alongside it.
+				if req.SpotifyClientSecret == nil || isMaskedValue(strings.TrimSpace(*req.SpotifyClientSecret)) {
 					st.SpotifyClientSecret = ""
 				}
 			}
@@ -416,8 +506,10 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 		}
 		if req.SpotifyClientSecret != nil {
 			clientSecret := strings.TrimSpace(*req.SpotifyClientSecret)
-			credentialsChanged = credentialsChanged || clientSecret != st.SpotifyClientSecret
-			st.SpotifyClientSecret = clientSecret
+			if !isMaskedValue(clientSecret) {
+				credentialsChanged = credentialsChanged || clientSecret != st.SpotifyClientSecret
+				st.SpotifyClientSecret = clientSecret
+			}
 		}
 		if credentialsChanged {
 			st.SpotifyAccessToken = ""
@@ -432,10 +524,10 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 				st.Provider = p
 			}
 		}
-		if req.OpenRouterKey != nil {
+		if req.OpenRouterKey != nil && !isMaskedValue(*req.OpenRouterKey) {
 			st.OpenRouterAPIKey = strings.TrimSpace(*req.OpenRouterKey)
 		}
-		if req.OpenCodeKey != nil {
+		if req.OpenCodeKey != nil && !isMaskedValue(*req.OpenCodeKey) {
 			st.OpenCodeAPIKey = strings.TrimSpace(*req.OpenCodeKey)
 		}
 		if req.OpenRouterModel != nil && strings.TrimSpace(*req.OpenRouterModel) != "" {
@@ -444,16 +536,16 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 		if req.OpenCodeModel != nil && strings.TrimSpace(*req.OpenCodeModel) != "" {
 			st.OpenCodeModel = strings.TrimSpace(*req.OpenCodeModel)
 		}
-		if req.OpenAIKey != nil {
+		if req.OpenAIKey != nil && !isMaskedValue(*req.OpenAIKey) {
 			st.OpenAIAPIKey = strings.TrimSpace(*req.OpenAIKey)
 		}
-		if req.MistralKey != nil {
+		if req.MistralKey != nil && !isMaskedValue(*req.MistralKey) {
 			st.MistralAPIKey = strings.TrimSpace(*req.MistralKey)
 		}
-		if req.ClaudeKey != nil {
+		if req.ClaudeKey != nil && !isMaskedValue(*req.ClaudeKey) {
 			st.ClaudeAPIKey = strings.TrimSpace(*req.ClaudeKey)
 		}
-		if req.GoogleKey != nil {
+		if req.GoogleKey != nil && !isMaskedValue(*req.GoogleKey) {
 			st.GoogleAPIKey = strings.TrimSpace(*req.GoogleKey)
 		}
 		if req.OpenAIModel != nil && strings.TrimSpace(*req.OpenAIModel) != "" {
@@ -476,6 +568,10 @@ func (s *Server) handleUpdateSettings(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, fail{Error: err.Error()})
 		return
 	}
+	if updated, uerr := s.store.Load(); uerr == nil {
+		s.registerSecrets(updated)
+	}
+	logs.LogInfo("Settings updated (provider=%s, theme set=%v)", s.settings().Provider, req.Theme != nil)
 	s.handleGetSettings(c)
 }
 
@@ -746,12 +842,14 @@ func (s *Server) handleDashboard(c *gin.Context) {
 // ---- AI handler ----
 
 type chatReq struct {
-	Message string       `json:"message"`
-	History []ai.Message `json:"history"`
+	Message   string       `json:"message"`
+	History   []ai.Message `json:"history"`
+	SessionID string       `json:"session_id"`
 }
 
 type chatRes struct {
-	Reply string `json:"reply"`
+	Reply     string `json:"reply"`
+	SessionID string `json:"session_id"`
 }
 
 func (s *Server) handleAIChat(c *gin.Context) {
@@ -782,6 +880,7 @@ func (s *Server) handleAIChat(c *gin.Context) {
 
 	cat, err := s.getCatalog(ctx, st.SpotifyAccessToken)
 	if err != nil {
+		logs.LogError("AI chat: catalog refresh failed: %v", err)
 		c.JSON(http.StatusBadGateway, fail{Error: err.Error()})
 		return
 	}
@@ -803,8 +902,10 @@ func (s *Server) handleAIChat(c *gin.Context) {
 		MaxSteps: 8,
 	}
 
+	logs.LogInfo("AI chat: running %s/%s", agent.Cfg.Provider, agent.Cfg.Model)
 	reply, err := agent.Run(ctx, req.History, req.Message)
 	if err != nil {
+		logs.LogError("AI chat failed: %v", err)
 		c.JSON(http.StatusBadGateway, fail{Error: err.Error()})
 		return
 	}
@@ -814,7 +915,22 @@ func (s *Server) handleAIChat(c *gin.Context) {
 		s.invalidateCatalog()
 	}
 
-	c.JSON(http.StatusOK, chatRes{Reply: reply})
+	// Persist the exchange so the conversation survives reloads/restarts.
+	sessionID := req.SessionID
+	if s.chats != nil {
+		now := time.Now()
+		saved, cerr := s.chats.Append(sessionID,
+			store.ChatMessage{Role: "user", Content: req.Message, At: now},
+			store.ChatMessage{Role: "assistant", Content: reply, At: now},
+		)
+		if cerr != nil {
+			logs.LogWarn("AI chat: could not persist history: %v", cerr)
+		} else {
+			sessionID = saved.ID
+		}
+	}
+
+	c.JSON(http.StatusOK, chatRes{Reply: reply, SessionID: sessionID})
 }
 
 // handleRefresh forces a catalog refresh.
@@ -825,19 +941,151 @@ func (s *Server) handleRefresh(c *gin.Context) {
 	}
 	s.invalidateCatalog()
 	if _, err := s.getCatalog(c.Request.Context(), st.SpotifyAccessToken); err != nil {
+		logs.LogError("Catalog refresh failed: %v", err)
 		c.JSON(http.StatusBadGateway, fail{Error: err.Error()})
 		return
 	}
+	logs.LogInfo("Library catalog refreshed")
 	c.JSON(http.StatusOK, gin.H{"ok": true})
 }
 
+// ---- AI chat history ----
+
+// handleListChats returns saved chat sessions (newest activity first).
+func (s *Server) handleListChats(c *gin.Context) {
+	if s.chats == nil {
+		c.JSON(http.StatusOK, gin.H{"chats": []store.ChatSession{}})
+		return
+	}
+	c.JSON(http.StatusOK, gin.H{"chats": s.chats.List()})
+}
+
+// handleGetChat returns one full conversation.
+func (s *Server) handleGetChat(c *gin.Context) {
+	if s.chats == nil {
+		c.JSON(http.StatusNotFound, fail{Error: "not found"})
+		return
+	}
+	sess, ok := s.chats.Get(c.Param("id"))
+	if !ok {
+		c.JSON(http.StatusNotFound, fail{Error: "chat not found"})
+		return
+	}
+	c.JSON(http.StatusOK, sess)
+}
+
+// handleDeleteChat removes one conversation.
+func (s *Server) handleDeleteChat(c *gin.Context) {
+	if s.chats == nil {
+		c.JSON(http.StatusNotFound, fail{Error: "not found"})
+		return
+	}
+	if err := s.chats.Delete(c.Param("id")); err != nil {
+		c.JSON(http.StatusNotFound, fail{Error: "chat not found"})
+		return
+	}
+	logs.LogInfo("Chat session deleted")
+	c.JSON(http.StatusOK, gin.H{"ok": true})
+}
+
+// ---- Listening history ----
+
+// handleHistory returns the user's recently played tracks.
+func (s *Server) handleHistory(c *gin.Context) {
+	st, ok := s.requireSpotify(c)
+	if !ok {
+		return
+	}
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 30*time.Second)
+	defer cancel()
+
+	// Spotify caps recently-played at 50 items per request.
+	raw, err := s.sp.RecentlyPlayed(ctx, st.SpotifyAccessToken, 50)
+	if err != nil {
+		logs.LogError("Listening history fetch failed: %v", err)
+		c.JSON(http.StatusBadGateway, fail{Error: err.Error()})
+		return
+	}
+
+	type historyDTO struct {
+		ID         string   `json:"id"`
+		Name       string   `json:"name"`
+		Artists    []string `json:"artists"`
+		Album      string   `json:"album"`
+		AlbumImage string   `json:"album_image"`
+		DurationMS int      `json:"duration_ms"`
+		PlayedAt   string   `json:"played_at"`
+	}
+	out := make([]historyDTO, 0, len(raw))
+	for _, r := range raw {
+		artists := make([]string, 0, len(r.Track.Artists))
+		for _, a := range r.Track.Artists {
+			artists = append(artists, a.Name)
+		}
+		out = append(out, historyDTO{
+			ID:         r.Track.ID,
+			Name:       r.Track.Name,
+			Artists:    artists,
+			Album:      r.Track.Album.Name,
+			AlbumImage: firstImage(r.Track.Album.Images),
+			DurationMS: r.Track.DurationMS,
+			PlayedAt:   r.PlayedAt,
+		})
+	}
+	c.JSON(http.StatusOK, gin.H{"items": out, "total": len(out)})
+}
+
+// ---- Logs ----
+
+// handleLogs returns recorded log entries, optionally filtered by
+// ?level=info|warning|error.
+func (s *Server) handleLogs(c *gin.Context) {
+	var level logs.Level
+	switch strings.ToLower(c.Query("level")) {
+	case "info":
+		level = logs.Info
+	case "warning", "warn":
+		level = logs.Warning
+	case "error":
+		level = logs.Error
+	}
+	entries := logs.Default.All(level)
+	c.JSON(http.StatusOK, gin.H{"entries": entries, "total": len(entries)})
+}
+
 // ---- Router + static serving ----
+
+// requestLogger records API request outcomes in the in-memory log:
+// errors for 5xx, warnings for 4xx, info otherwise. Static file
+// serving and the log/settings polling endpoints are skipped to keep
+// the Logs section meaningful.
+func (s *Server) requestLogger() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+		path := c.Request.URL.Path
+		if !strings.HasPrefix(path, "/api/") ||
+			path == "/api/logs" || path == "/api/health" || path == "/api/settings" {
+			return
+		}
+		status := c.Writer.Status()
+		msg := fmt.Sprintf("%s %s → %d", c.Request.Method, path, status)
+		switch {
+		case status >= 500:
+			logs.LogError("%s", msg)
+		case status >= 400:
+			logs.LogWarn("%s", msg)
+		default:
+			logs.LogInfo("%s", msg)
+		}
+	}
+}
 
 // Router builds the Gin engine with all API routes and the SPA static handler.
 func (s *Server) Router() *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 	r := gin.New()
 	r.Use(gin.Recovery())
+	r.Use(s.requestLogger())
 	r.MaxMultipartMemory = 1 << 20
 
 	// API
@@ -851,7 +1099,12 @@ func (s *Server) Router() *gin.Engine {
 		api.GET("/musics", s.handleMusics)
 		api.GET("/playlists", s.handlePlaylists)
 		api.GET("/podcasts", s.handlePodcasts)
+		api.GET("/history", s.handleHistory)
 		api.POST("/ai/chat", s.handleAIChat)
+		api.GET("/chats", s.handleListChats)
+		api.GET("/chats/:id", s.handleGetChat)
+		api.DELETE("/chats/:id", s.handleDeleteChat)
+		api.GET("/logs", s.handleLogs)
 		api.POST("/refresh", s.handleRefresh)
 	}
 	api.GET("/models", func(c *gin.Context) {

@@ -4,6 +4,7 @@ export interface PublicSettings {
   spotify_configured: boolean
   spotify_client_id: string
   spotify_client_id_set: boolean
+  spotify_client_secret: string
   spotify_client_secret_set: boolean
   spotify_redirect_uri: string
   spotify_user_id: string
@@ -14,6 +15,12 @@ export interface PublicSettings {
   mistral_set: boolean
   claude_set: boolean
   google_set: boolean
+  openrouter_key_masked: string
+  opencode_key_masked: string
+  openai_key_masked: string
+  mistral_key_masked: string
+  claude_key_masked: string
+  google_key_masked: string
   openrouter_model: string
   opencode_model: string
   openai_model: string
@@ -75,5 +82,29 @@ export interface ChatMessage {
   content: string
 }
 
-export const THEMES = ['dark', 'darkplus', 'light', 'spotify', 'ocean', 'sunset', 'rose', 'mono'] as const
+export interface ChatSession {
+  id: string
+  title: string
+  created_at: string
+  updated_at: string
+  messages?: ChatMessage[]
+}
+
+export interface HistoryItem {
+  id: string
+  name: string
+  artists: string[]
+  album: string
+  album_image: string
+  duration_ms: number
+  played_at: string
+}
+
+export interface LogEntry {
+  time: string
+  level: 'info' | 'warning' | 'error'
+  message: string
+}
+
+export const THEMES = ['github', 'dark', 'darkplus', 'light', 'spotify', 'ocean', 'sunset', 'rose', 'mono'] as const
 export type Theme = (typeof THEMES)[number]
