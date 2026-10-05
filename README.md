@@ -17,24 +17,38 @@ SpotiGent wraps the Spotify Web API behind a local web UI and an AI agent (OpenR
 - **Masked keys** — any stored or environment key is displayed as `********` (actual key length) everywhere in the UI and API; masked values are ignored on save
 - **PWA** — installable app with offline shell (manifest + service worker)
 
-## Quick start
+## CLI and installation
+
+The Windows installer places `spotigent.exe` in `%USERPROFILE%\AppData\Spotigent`, adds that directory to the current user's PATH, and keeps settings/history under `%USERPROFILE%\AppData\Spotigent\data`.
+
+```powershell
+# Build and install (from the project root)
+.\scripts\installer-win-x64.ps1 -Version 1.1.0
+
+# Available in new terminals after installation
+spotigent start                 # starts at http://127.0.0.1:9090
+spotigent start --port=9091     # select a different port
+spotigent stop
+spotigent update
+spotigent remove
+spotigent help
+spotigent version
+```
+
+`update` rebuilds and reinstalls from the project checkout that originally installed it; when invoked through a standalone shortcut, set `SPOTIGENT_SOURCE_DIR` to that checkout first. `spotigent start` defaults to port 9090. `remove` removes the installation and PATH entry; application data in the installation folder is removed too. A signed production build requires an appropriate code-signing certificate; the installer can install an unsigned development build when the signing tool/certificate is unavailable.
+
+## Development
 
 Requirements: Go 1.26+, Node 20+.
 
 ```bash
-# 1. Backend
-go run ./cmd/spotigent            # serves API + built UI on http://127.0.0.1:8080
+# Backend direct-run mode (port 8080)
+go run ./cmd/spotigent start --port=8080
 
-# 2. Frontend (first time, then after UI changes)
+# Frontend build (first time, then after UI changes)
 cd web && npm install && npm run build && cd ..
 
-# 3. Open http://127.0.0.1:8080
-```
-
-For frontend development with hot reload:
-
-```bash
-go run ./cmd/spotigent &          # API on :8080
+# Frontend development with hot reload (run backend separately)
 cd web && npm run dev             # Vite on :5173, proxies /api to :8080
 ```
 
