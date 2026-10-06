@@ -1,0 +1,22 @@
+---
+description: After every task in SpotiGent, rebuild and reinstall SpotiGent locally so the latest changes are live
+alwaysApply: true
+---
+
+# Rebuild and update after every task
+
+When you finish any task that changes code, config or anything else the running app uses, rebuild and update the local install before you report back. Run commands from the repo root.
+
+Rebuild and reinstall the Windows app. The installer runs `go build` for `spotigent.exe`, signs it when the Dashti Technologies certificate is available, and installs it while keeping settings and history:
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\installer-win-x64.ps1
+```
+If the exe is locked, close the running SpotiGent first and run the installer again.
+
+**Never wipe data.** Don't remove volumes, databases, settings or logs (no `docker compose down -v`, no remove/uninstall scripts) unless the user explicitly asks.
+
+**If the update fails,** fix it if your change caused it and run it again. Don't report the task as done while the app is broken. If the failure isn't related to your change, report it clearly.
+
+**Verify.** Confirm the installed `spotigent.exe` hash matches the new build (the installer writes `spotigent.exe.sha256`) and that the app starts. Mention the result in your final reply.
+
+Skip these steps only for tasks that don't affect the running app, such as answering questions or editing docs.
