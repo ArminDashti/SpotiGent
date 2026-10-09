@@ -1,8 +1,14 @@
 ---
-description: Self-learning — recognize a hard-won "golden path" during a task and persist it as a reusable Cursor rule so the next session already knows it. Applies whenever a task succeeds only after several tries, uses non-obvious tooling or commands, reveals project facts (how to reach the DB, where creds/env vars live, how to deploy, run migrations, or verify a change live), or the user says "remember this".
+description: >-
+  Self-learning — recognize a hard-won "golden path" during a task and persist it as a reusable Cursor rule so the next session already knows it. Applies whenever a task succeeds only after several tries, uses non-obvious tooling or commands, reveals project facts (how to reach the DB, where creds/env vars live, how to deploy, run migrations, or verify a change live), or the user says "remember this".
 alwaysApply: true
+metadata:
+  version: 1.0.0
+  author: "Armin Dashti"
+  tags: []
+  last_updated: "2026-10-08 22:11:19"
+  uuid: 40b103c2-1ee4-4276-9d46-5cdace196c94
 ---
-
 # Self-learning
 
 Make yourself self-improving: when you earn a reusable **golden path**, capture
