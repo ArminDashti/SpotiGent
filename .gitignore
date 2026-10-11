@@ -40,3 +40,9 @@ coverage/
 graphify-out/
 .gitnexus/
 !.env.example
+
+# keep source files
+!/build/windows/
+!/build/windows/**
+!internal/logs/
+!internal/logs/*.go
