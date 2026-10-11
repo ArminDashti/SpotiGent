@@ -23,13 +23,13 @@ spotigent.exe.sha256
 
 # hygiene
 dist/
-build/
+build/*
 bin/
 obj/
 .venv/
 __pycache__/
 *.log
-logs/
+logs/*
 .env
 .env.*
 *.tsbuildinfo
