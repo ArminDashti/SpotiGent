@@ -20,3 +20,23 @@ server.log
 .freebuff/
 spotigent.exe.sha256
 # commit-push-to-github: ignore files > 5MB
+
+# hygiene
+dist/
+build/
+bin/
+obj/
+.venv/
+__pycache__/
+*.log
+logs/
+.env
+.env.*
+*.tsbuildinfo
+.cache/
+coverage/
+*.zip
+*.7z
+graphify-out/
+.gitnexus/
+!.env.example
