@@ -43,6 +43,7 @@ const suggestions = [
   'Make a workout playlist from my favorite genres',
   'Find podcasts about technology and list them',
 ]
+const suggestionIcons = ['🎵', '📊', '🏃', '🎙️']
 
 watch(history, () => {
   nextTick(() => listEl.value?.scrollTo({ top: listEl.value.scrollHeight, behavior: 'smooth' }))
@@ -119,84 +120,109 @@ async function send(text?: string) {
 </script>
 
 <template>
-  <div class="flex h-full gap-4 min-h-[60vh]">
+  <div class="flex h-full min-h-[60vh] gap-4">
     <!-- History sidebar -->
-    <aside class="hidden md:flex w-60 shrink-0 flex-col card p-3">
-      <button class="btn-primary w-full mb-3" :disabled="busy" @click="newChat">＋ New chat</button>
-      <div class="text-xs uppercase tracking-wider text-muted px-1 mb-1">History</div>
-      <div class="flex-1 overflow-y-auto space-y-1">
+    <aside class="hidden w-64 shrink-0 flex-col rounded-2xl border border-line bg-surface p-3 md:flex">
+      <button class="btn-primary mb-4 w-full rounded-xl" :disabled="busy" @click="newChat">
+        <span>⊕</span> New chat
+      </button>
+      <div class="mb-2 flex items-center gap-2 px-2 text-xs uppercase tracking-wider text-muted">
+        <span>🕘</span> History
+      </div>
+      <div class="flex-1 space-y-1 overflow-y-auto">
         <div
           v-for="s in sessions"
           :key="s.id"
-          class="group flex items-center gap-1 rounded-lg px-2 py-2 text-sm cursor-pointer transition-colors"
+          class="group flex cursor-pointer items-center gap-1 rounded-xl px-3 py-2.5 text-sm transition-colors"
           :class="s.id === currentSessionId ? 'bg-accent/15 text-accent font-semibold' : 'text-muted hover:bg-surface2 hover:text-content'"
           @click="openSession(s)"
         >
-          <span class="flex-1 min-w-0">
+          <span class="min-w-0 flex-1">
             <span class="block truncate">{{ s.title }}</span>
-            <span class="block text-xs opacity-70 truncate">{{ fmtWhen(s.updated_at) }}</span>
+            <span class="block truncate text-xs opacity-70">{{ fmtWhen(s.updated_at) }}</span>
           </span>
           <button
-            class="opacity-0 group-hover:opacity-100 text-xs hover:text-red-400 px-1"
+            class="px-1 text-xs opacity-0 hover:text-red-400 group-hover:opacity-100"
             title="Delete chat"
             @click.stop="removeSession(s.id)"
           >
             ✕
           </button>
         </div>
-        <div v-if="sessions.length === 0" class="text-xs text-muted px-1 py-2">
+        <div v-if="sessions.length === 0" class="px-2 py-3 text-xs text-muted">
           No saved conversations yet — chats are stored automatically.
         </div>
       </div>
     </aside>
 
     <!-- Conversation -->
-    <div class="flex-1 flex flex-col min-w-0">
-      <div class="flex items-center justify-between mb-3">
-        <span class="pill">{{ providerLabel }}</span>
+    <div class="flex min-w-0 flex-1 flex-col">
+      <div class="mb-4 flex items-center justify-between">
+        <span class="pill gap-2 rounded-full px-3 py-1.5">
+          <span class="inline-block h-2 w-2 rounded-full bg-accent"></span>
+          {{ providerLabel }}
+        </span>
         <div class="flex gap-2">
-          <button class="btn-ghost md:hidden" @click="newChat">＋ New</button>
-          <button class="btn-ghost" @click="newChat">Clear chat</button>
+          <button class="btn-ghost rounded-full md:hidden" @click="newChat">＋ New</button>
+          <button class="btn-ghost rounded-full" @click="newChat">Clear chat</button>
         </div>
       </div>
 
-      <div ref="listEl" class="flex-1 card p-4 space-y-3 overflow-y-auto min-h-[40vh]">
-        <div v-if="loadingHistory" class="h-full flex items-center justify-center text-sm text-muted">
+      <div ref="listEl" class="flex min-h-[40vh] flex-1 flex-col overflow-y-auto rounded-2xl border border-line bg-surface p-6">
+        <div v-if="loadingHistory" class="flex h-full items-center justify-center text-sm text-muted">
           Loading conversation…
         </div>
-        <div v-else-if="history.length === 0" class="h-full flex flex-col items-center justify-center text-center text-muted gap-3">
-          <div class="text-4xl">✨</div>
-          <div class="text-sm max-w-md">
-            Ask the AI to manage your Spotify — it can search tracks, create playlists, add or remove songs, and start
-            playback using the tools wired to your account. Conversations are saved to your history.
+
+        <div
+          v-else-if="history.length === 0"
+          class="flex h-full flex-col items-center justify-center gap-5 text-center"
+        >
+          <div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-accent/15 text-3xl">✨</div>
+          <div>
+            <h2 class="text-xl font-bold">Ask the AI to manage your Spotify</h2>
+            <p class="mx-auto mt-2 max-w-lg text-sm text-muted">
+              It can search tracks, create playlists, add or remove songs, and start playback using the tools wired
+              to your account. Conversations are saved to your history.
+            </p>
           </div>
-          <div class="flex flex-wrap gap-2 justify-center">
-            <button v-for="s in suggestions" :key="s" class="btn-ghost text-xs" @click="send(s)">{{ s }}</button>
+          <div class="grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-2">
+            <button
+              v-for="(s, i) in suggestions"
+              :key="s"
+              class="flex items-center gap-3 rounded-xl border border-line bg-surface2 px-4 py-3 text-left text-sm transition-colors hover:border-accent/50 hover:bg-surface2/80"
+              @click="send(s)"
+            >
+              <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-accent/15">{{ suggestionIcons[i] }}</span>
+              <span>{{ s }}</span>
+            </button>
           </div>
         </div>
 
-        <template v-for="(m, i) in history" :key="i">
-          <div class="flex" :class="m.role === 'user' ? 'justify-end' : 'justify-start'">
-            <div
-              class="max-w-[75%] rounded-2xl px-4 py-2 text-sm whitespace-pre-wrap border"
-              :class="m.role === 'user' ? 'bg-accent/15 border-accent/30' : 'bg-surface border-line'"
-            >
-              {{ m.content }}
-              <span v-if="busy && i === history.length - 1 && m.role === 'user'" class="ml-1 animate-pulse">▋</span>
+        <div v-else class="space-y-3">
+          <template v-for="(m, i) in history" :key="i">
+            <div class="flex" :class="m.role === 'user' ? 'justify-end' : 'justify-start'">
+              <div
+                class="max-w-[75%] whitespace-pre-wrap rounded-2xl border px-4 py-2.5 text-sm"
+                :class="m.role === 'user' ? 'border-accent/30 bg-accent/15' : 'border-line bg-surface2'"
+              >
+                {{ m.content }}
+                <span v-if="busy && i === history.length - 1 && m.role === 'user'" class="ml-1 animate-pulse">▋</span>
+              </div>
             </div>
-          </div>
-        </template>
+          </template>
+        </div>
       </div>
 
-      <div class="mt-3 flex gap-2">
+      <div class="mt-4 flex items-center gap-2 rounded-2xl border border-line bg-surface p-2 pl-4 focus-within:ring-2 focus-within:ring-accent/50">
         <input
           v-model="input"
-          class="input flex-1"
+          class="min-w-0 flex-1 bg-transparent py-2 text-sm text-content placeholder:text-muted focus:outline-none"
           placeholder="e.g. Create a 'Focus@Work' playlist with 20 deep house tracks"
           :disabled="busy"
           @keydown.enter="send()"
         />
-        <button class="btn-primary" :disabled="busy || !input.trim()" @click="send()">
+        <button class="btn-primary rounded-xl px-5" :disabled="busy || !input.trim()" @click="send()">
+          <span>▷</span>
           {{ busy ? 'Thinking…' : 'Send' }}
         </button>
       </div>

@@ -58,8 +58,10 @@ if (Test-Path $PidFile) {
   $serverPid = Get-Content $PidFile -ErrorAction SilentlyContinue
   if ($serverPid -match '^\d+$') { & taskkill.exe /PID $serverPid /T /F 2>$null | Out-Null }
   Remove-Item $PidFile -Force -ErrorAction SilentlyContinue
-  Start-Sleep -Milliseconds 500
 }
+# Close every SpotiGent instance (including stale copies with no PID file) so the executable can be replaced.
+Get-Process -Name "spotigent" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Milliseconds 800
 New-Item -ItemType Directory -Force $Base | Out-Null
 Copy-Item $Source (Join-Path $Base $ExeName) -Force
 $installedHash = (Get-FileHash -Path (Join-Path $Base $ExeName) -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -74,8 +76,8 @@ New-Item -ItemType Directory -Force $DataDir | Out-Null
 $env:SPOTIGENT_DATA_DIR = $null
 $env:SPOTIGENT_SOURCE_DIR = $Root
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
-$Entries = @($UserPath -split ";" | Where-Object { $_ -and $_.TrimEnd('\') -ine $Base.TrimEnd('\') })
-$Entries += $Base
+# Put the install directory first so `spotigent` never resolves to a stale copy elsewhere on PATH.
+$Entries = @($Base) + @($UserPath -split ";" | Where-Object { $_ -and $_.TrimEnd('\') -ine $Base.TrimEnd('\') })
 [Environment]::SetEnvironmentVariable("Path", ($Entries -join ";"), "User")
 $env:Path = "$Base;$env:Path"
 
@@ -91,3 +93,7 @@ public static extern System.IntPtr SendMessageTimeout(System.IntPtr hWnd, uint M
 } catch { Write-Verbose "Environment change notification skipped: $_" }
 Msg "installed $ExeName to $Base" Green
 Msg "CLI available: spotigent help (in new terminals)" Green
+if ($Start) {
+  & (Join-Path $Base $ExeName) start
+  if ($LASTEXITCODE -ne 0) { throw "failed to start SpotiGent" }
+}

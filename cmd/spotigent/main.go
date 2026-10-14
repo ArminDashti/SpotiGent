@@ -362,11 +362,7 @@ func rebuildInstallation() error {
 	if runtime.GOOS != "windows" {
 		return errors.New("rebuild is supported by the Windows installer only")
 	}
-	install, err := installDir()
-	if err != nil {
-		return err
-	}
-	if err := closeAllInstances(filepath.Join(install, executableName())); err != nil {
+	if err := closeAllInstances(); err != nil {
 		return err
 	}
 	if pidFile, err := pidPath(); err == nil {
@@ -376,11 +372,13 @@ func rebuildInstallation() error {
 	return runInstaller("-Update", "-Start")
 }
 
-// closeAllInstances force-closes every running process of the installed executable,
-// except the current process, which is the rebuild command itself.
-func closeAllInstances(installed string) error {
-	ps := fmt.Sprintf(`$ErrorActionPreference='Stop'; Get-Process -Name spotigent -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '%s' -and $_.Id -ne %d } | ForEach-Object { Stop-Process -Id $_.Id -Force; Write-Output "closed PID $($_.Id)" }; Start-Sleep -Milliseconds 500`,
-		strings.ReplaceAll(installed, "'", "''"), os.Getpid())
+// closeAllInstances force-closes every running SpotiGent process (any install location),
+// except the current process, which is the rebuild command itself. Matching by name
+// rather than path catches stale copies whose path cannot be read.
+func closeAllInstances() error {
+	name := strings.TrimSuffix(executableName(), filepath.Ext(executableName()))
+	ps := fmt.Sprintf(`$ErrorActionPreference='Stop'; Get-Process -Name '%s' -ErrorAction SilentlyContinue | Where-Object { $_.Id -ne %d } | ForEach-Object { Stop-Process -Id $_.Id -Force; Write-Output "closed PID $($_.Id)" }; Start-Sleep -Milliseconds 500`,
+		strings.ReplaceAll(name, "'", "''"), os.Getpid())
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
