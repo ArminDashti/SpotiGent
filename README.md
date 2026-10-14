@@ -30,12 +30,13 @@ spotigent start                 # starts at http://127.0.0.1:9090
 spotigent start --port=9091     # select a different port
 spotigent stop
 spotigent update
+spotigent rebuild
 spotigent remove
 spotigent help
 spotigent version
 ```
 
-`update` rebuilds and reinstalls from the project checkout that originally installed it; when invoked through a standalone shortcut, set `SPOTIGENT_SOURCE_DIR` to that checkout first. `spotigent start` defaults to port 9090. `remove` removes the installation and PATH entry; application data in the installation folder is removed too. A signed production build requires an appropriate code-signing certificate; the installer can install an unsigned development build when the signing tool/certificate is unavailable.
+`update` rebuilds and reinstalls from the project checkout that originally installed it; when invoked through a standalone shortcut, set `SPOTIGENT_SOURCE_DIR` to that checkout first. `rebuild` closes every running instance of the installed app, rebuilds and reinstalls the same way, then starts the new build automatically so changes are visible right away. `spotigent start` defaults to port 9090. `remove` removes the installation and PATH entry; application data in the installation folder is removed too. A signed production build requires an appropriate code-signing certificate; the installer can install an unsigned development build when the signing tool/certificate is unavailable.
 
 ## Development
 

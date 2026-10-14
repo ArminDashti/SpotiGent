@@ -74,6 +74,8 @@ func run(args []string) error {
 		return removeInstallation()
 	case "update":
 		return updateInstallation()
+	case "rebuild":
+		return rebuildInstallation()
 	default:
 		return fmt.Errorf("unknown command %q; run 'spotigent help'", args[0])
 	}
@@ -86,6 +88,7 @@ Usage:
   spotigent start [--port=<port>]
   spotigent stop
   spotigent update
+  spotigent rebuild
   spotigent remove
   spotigent version
   spotigent help
@@ -352,6 +355,42 @@ func updateInstallation() error {
 	if !strings.EqualFold(current, installed) {
 		return fmt.Errorf("run update using the installed binary: %s", installed)
 	}
+	return runInstaller("-Update")
+}
+
+func rebuildInstallation() error {
+	if runtime.GOOS != "windows" {
+		return errors.New("rebuild is supported by the Windows installer only")
+	}
+	install, err := installDir()
+	if err != nil {
+		return err
+	}
+	if err := closeAllInstances(filepath.Join(install, executableName())); err != nil {
+		return err
+	}
+	if pidFile, err := pidPath(); err == nil {
+		_ = os.Remove(pidFile)
+	}
+	fmt.Println("rebuilding SpotiGent; the new build starts once the installed executable is replaced")
+	return runInstaller("-Update", "-Start")
+}
+
+// closeAllInstances force-closes every running process of the installed executable,
+// except the current process, which is the rebuild command itself.
+func closeAllInstances(installed string) error {
+	ps := fmt.Sprintf(`$ErrorActionPreference='Stop'; Get-Process -Name spotigent -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '%s' -and $_.Id -ne %d } | ForEach-Object { Stop-Process -Id $_.Id -Force; Write-Output "closed PID $($_.Id)" }; Start-Sleep -Milliseconds 500`,
+		strings.ReplaceAll(installed, "'", "''"), os.Getpid())
+	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", ps)
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("close running instances: %w", err)
+	}
+	return nil
+}
+
+// runInstaller runs the Windows installer script from the project checkout.
+func runInstaller(flags ...string) error {
 	root := os.Getenv("SPOTIGENT_SOURCE_DIR")
 	if root == "" {
 		return errors.New("SPOTIGENT_SOURCE_DIR is not set; reinstall from the project checkout")
@@ -360,7 +399,8 @@ func updateInstallation() error {
 	if _, err := os.Stat(installer); err != nil {
 		return fmt.Errorf("cannot find installer script at %s; set SPOTIGENT_SOURCE_DIR to the project checkout or install a new release", installer)
 	}
-	cmd := exec.Command("powershell.exe", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", installer, "-Update")
+	args := append([]string{"-NoProfile", "-ExecutionPolicy", "Bypass", "-File", installer}, flags...)
+	cmd := exec.Command("powershell.exe", args...)
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	return cmd.Run()
 }

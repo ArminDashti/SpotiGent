@@ -2,7 +2,8 @@ param(
   [string]$Version = "1.1.0",
   [string]$CertThumbprint = "",
   [switch]$SkipBuild,
-  [switch]$Update
+  [switch]$Update,
+  [switch]$Start
 )
 $ErrorActionPreference = "Stop"
 $App = "Spotigent"
@@ -27,8 +28,12 @@ if (-not $SkipBuild) {
 $Source = Join-Path $Root $ExeName
 if (!(Test-Path $Source)) { throw "Build executable not found: $Source" }
 if ($Update) {
-  $SelfUpdate = @'
-param([string]$Source, [string]$Target, [string]$Base)
+  # -EncodedCommand does not bind trailing arguments to param(), so values are embedded in the script text.
+  $Quote = { param($s) "'" + ($s -replace "'", "''") + "'" }
+  $Target = Join-Path $Base $ExeName
+  $StartFlag = if ($Start) { "1" } else { "0" }
+  $Prelude = "`$Source = $(& $Quote $Source); `$Target = $(& $Quote $Target); `$Base = $(& $Quote $Base); `$StartAfter = '$StartFlag'`r`n"
+  $SelfUpdate = $Prelude + @'
 $ErrorActionPreference = "Stop"
 Start-Sleep -Milliseconds 800
 $next = "$Target.new"
@@ -37,10 +42,15 @@ Move-Item -LiteralPath $next -Destination $Target -Force
 $hash = (Get-FileHash -LiteralPath $Target -Algorithm SHA256).Hash.ToLowerInvariant()
 Set-Content -LiteralPath "$Target.sha256" -Value "$hash  spotigent.exe" -Encoding ASCII
 Write-Host "Updated SpotiGent in $Base" -ForegroundColor Green
+if ($StartAfter -eq "1") {
+  & $Target start
+  exit $LASTEXITCODE
+}
 '@
   $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($SelfUpdate))
-  Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoProfile", "-NonInteractive", "-EncodedCommand", $encoded, $Source, (Join-Path $Base $ExeName), $Base) -WindowStyle Hidden
+  Start-Process -FilePath "powershell.exe" -ArgumentList @("-NoProfile", "-NonInteractive", "-EncodedCommand", $encoded) -WindowStyle Hidden
   Msg "update started; it will replace the executable after this CLI exits" Yellow
+  if ($Start) { Msg "the new build will start automatically once replaced" Yellow }
   exit 0
 }
 $PidFile = Join-Path $Base "spotigent.pid"
