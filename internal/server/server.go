@@ -1159,6 +1159,9 @@ func resolveStaticDir() string {
 		"web/dist",
 		"../web/dist",
 	}
+	if root := os.Getenv("SPOTIGENT_SOURCE_DIR"); root != "" {
+		candidates = append(candidates, filepath.Join(root, "web", "dist"))
+	}
 	if exe, err := os.Executable(); err == nil {
 		exeDir := filepath.Dir(exe)
 		candidates = append(candidates,
