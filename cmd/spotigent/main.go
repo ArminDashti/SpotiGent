@@ -30,7 +30,7 @@ const defaultPort = "9090"
 
 func main() {
 	if len(os.Args) > 1 && os.Args[1] == "_serve" {
-		port, err := parseStartArgs(os.Args[2:])
+		port, err := parseStartArgs(os.Args[2:], savedPort())
 		if err == nil {
 			var pidFile string
 			pidFile, err = pidPath()
@@ -45,6 +45,10 @@ func main() {
 		return
 	}
 	if err := run(os.Args[1:]); err != nil {
+		var code exitCodeError
+		if errors.As(err, &code) {
+			os.Exit(code.code)
+		}
 		fmt.Fprintln(os.Stderr, "SpotiGent:", err)
 		os.Exit(1)
 	}
@@ -63,13 +67,17 @@ func run(args []string) error {
 		fmt.Println(version)
 		return nil
 	case "start":
-		port, err := parseStartArgs(args[1:])
+		port, err := parseStartArgs(args[1:], savedPort())
 		if err != nil {
 			return err
 		}
 		return startServer(port)
 	case "stop":
 		return stopServer()
+	case "status":
+		return showStatus()
+	case "port":
+		return handlePort(args[1:])
 	case "remove":
 		return removeInstallation()
 	case "update":
@@ -87,18 +95,21 @@ func printHelp() {
 Usage:
   spotigent start [--port=<port>]
   spotigent stop
+  spotigent status
+  spotigent port [--port=<port>]
   spotigent update
   spotigent rebuild
   spotigent remove
   spotigent version
   spotigent help
 
-The server listens on 127.0.0.1:%s by default.
+The server listens on 127.0.0.1:%s by default; 'spotigent port --port=N' changes the saved default.
 `, version, defaultPort)
 }
 
-func parseStartArgs(args []string) (string, error) {
-	port := defaultPort
+// parseStartArgs reads an optional --port=N flag and falls back to the given port when absent.
+func parseStartArgs(args []string, fallback string) (string, error) {
+	port := fallback
 	for _, arg := range args {
 		if strings.HasPrefix(arg, "--port=") {
 			port = strings.TrimPrefix(arg, "--port=")
